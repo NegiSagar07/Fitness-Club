@@ -85,4 +85,4 @@ phase 3
         - list_bookings_for_user(user_id)
 
 
-    
+Hey! I guess this blueprint is sufficient.     

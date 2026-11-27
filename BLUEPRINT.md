@@ -84,5 +84,7 @@ phase 3
         - get_booking(booking_id)
         - list_bookings_for_user(user_id)
 
+Hello! how are you? I am fine, thank you.
+    
 
 Hey! I guess this blueprint is sufficient.     

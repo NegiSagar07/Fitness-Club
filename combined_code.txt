@@ -1,0 +1,1224 @@
+==> app/schema.py <==
+""" 
+Context: Reference the @models.py file.
+
+Task: Generate Pydantic V2 schemas for all SQLAlchemy models defined in models.py (User, YogaClass, Instructor, YogaSession, Schedule, Booking).
+
+Guidelines:
+
+Base Configuration: For every schema, include model_config = ConfigDict(from_attributes=True) to allow compatibility with SQLAlchemy objects.
+
+Naming Convention: >    - Create a Base schema for shared fields (e.g., UserBase).
+
+Create a Create schema for POST requests (e.g., UserCreate).
+
+Create a Read schema for API responses that includes id, created_at, and updated_at (e.g., User).
+
+Validation: >    - Use EmailStr for user emails.
+
+Ensure Optional is used for fields that are nullable=True in the models.
+
+Match String(255) constraints using Pydantic's Field(max_length=255).
+
+Relationships: >    - In the Read schemas, include relevant nested relationships (e.g., YogaSession should optionally include the Instructor and YogaClass data) to avoid multiple API calls.
+
+Imports: Include necessary imports from pydantic, datetime, and typing.
+"""
+
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, model_validator, field_validator
+from datetime import datetime
+from typing import Optional, List
+
+
+class UserBase(BaseModel):
+    name: str = Field(..., max_length=255)
+    email: EmailStr      
+
+
+class UserCreate(UserBase):
+    password: str = Field(..., max_length=255)  
+
+
+class UserResponse(UserBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True) 
+
+
+class YogaClassBase(BaseModel):
+    name: str = Field(..., max_length=255)
+    description: Optional[str] = Field(None, max_length=255)    
+
+
+class YogaClassCreate(YogaClassBase):
+    pass   
+
+
+class YogaClassUpdate(YogaClassBase):
+    pass
+
+
+class YogaClassResponse(YogaClassBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class InstructorBase(BaseModel):
+    name: str = Field(..., max_length=255)
+    bio: Optional[str] = Field(None, max_length=255)
+
+
+class InstructorCreate(InstructorBase):
+    pass
+
+
+class InstructorResponse(InstructorBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class YogaSessionBase(BaseModel):
+    instructor_id: int
+    yoga_class_id: int
+    start_time: datetime
+    end_time: datetime
+    max_capacity: int = Field(..., gt=0)
+
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def remove_timezone(cls, v):
+        """Remove timezone info to match PostgreSQL TIMESTAMP WITHOUT TIME ZONE"""
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+        return v
+
+    @model_validator(mode="after")
+    def check_times(self) -> "YogaSessionBase":
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be after start_time")
+        return self
+
+
+class YogaSessionCreate(YogaSessionBase):
+    pass    
+
+
+class YogaSessionUpdate(BaseModel):
+    instructor_id: Optional[int] = None
+    yoga_class_id: Optional[int] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    max_capacity: Optional[int] = None
+
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def remove_timezone(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+        return v
+    
+    @model_validator(mode="after")
+    def check_times(self) -> "YogaSessionUpdate":
+        if self.start_time and self.end_time and self.end_time <= self.start_time:
+            raise ValueError("end_time must be after start_time")
+        return self
+
+
+class YogaSessionResponse(YogaSessionBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ScheduleBase(BaseModel):
+    yoga_class_id: int
+    instructor_id: int
+    start_time: datetime
+    end_time: datetime
+    weekday: int = Field(..., ge=0, le=6)
+
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def remove_timezone(cls, v):
+        """Remove timezone info to match PostgreSQL TIMESTAMP WITHOUT TIME ZONE"""
+        if isinstance(v, datetime) and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+        return v
+
+    @model_validator(mode="after")
+    def check_times(self) -> "ScheduleBase":
+        if self.end_time <= self.start_time:
+            raise ValueError("end_time must be after start_time")
+        return self
+
+
+class ScheduleCreate(ScheduleBase):
+    pass
+
+
+class ScheduleUpdate(BaseModel):
+    yoga_class_id: int | None = None
+    instructor_id: int | None = None
+    start_time: datetime | None = None
+    end_time: datetime | None = None
+    weekday: int | None = Field(default=None, ge=0, le=6)
+
+    @field_validator("start_time", "end_time", mode="after")
+    @classmethod
+    def remove_timezone(cls, v: Optional[datetime]) -> Optional[datetime]:
+        if v is not None and v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+        return v
+    
+    @model_validator(mode="after")
+    def check_times(self) -> "ScheduleUpdate":
+        if self.start_time and self.end_time and self.end_time <= self.start_time:
+            raise ValueError("end_time must be after start_time")
+        return self
+
+
+class ScheduleResponse(ScheduleBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True) 
+
+
+class BookingBase(BaseModel):
+    session_id: int
+
+
+class BookingCreate(BookingBase):
+    pass
+
+
+class BookingUpdate(BaseModel):
+    session_id: Optional[int] = None
+
+
+class BookingResponse(BookingBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    user_id: Optional[int] = None
+==> app/database.py <==
+"""
+Docstring for app.database
+
+Using the database url from app/config.py, set up an async database connection using SQLAlchemy and asyncpg.
+I need an AsyncEngine and async_sessionmaker and an async get_db function that can be used as a dependency in my routes.
+"""
+
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    create_async_engine,
+    async_sessionmaker,
+)
+from typing import AsyncGenerator
+from sqlalchemy.orm import DeclarativeBase
+from .core.config import settings
+
+
+class Base(DeclarativeBase):
+    """Base registry for all database models."""
+    pass
+
+# We trust that settings.DATABASE_URL is already validated by Pydantic
+DATABASE_URL = settings.DATABASE_URL 
+
+engine: AsyncEngine = create_async_engine(DATABASE_URL, echo=True) #echo=True for logging SQL queries, can be turned off in production
+
+AsyncSessionLocal = async_sessionmaker(
+    engine,
+    autocommit=False,
+    autoflush=False,
+    expire_on_commit=False # improve performance in async fastapi apps
+)
+
+async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
+    async with AsyncSessionLocal() as session:
+        yield session
+
+async def init_db():
+    """Initialize the database by creating all tables."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+==> app/models.py <==
+"""
+This module defines the SQLAlchemy models for the fitness club application, including User, YogaClass, session, schedule, bookings and instructor. 
+Each model corresponds to a table in the PostgreSQL database and includes fields for storing relevant information, as well as timestamps 
+for creation and updates. The models also establish relationships between users, yoga classes, sessions, schedules, bookings and instructors
+
+"""
+
+
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import String, Integer, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy.sql import func
+from datetime import datetime
+from .database import Base
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    yoga_sessions: Mapped[list["YogaSession"]] = relationship("YogaSession", secondary="bookings", back_populates="users")
+    bookings: Mapped[list["Booking"]] = relationship("Booking", back_populates="user")
+
+
+class YogaClass(Base):
+    __tablename__ = "yoga_classes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    instructor: Mapped[list["Instructor"]] = relationship("Instructor", secondary="schedules", back_populates="yoga_classes")
+    yoga_sessions: Mapped[list["YogaSession"]] = relationship("YogaSession", back_populates="yoga_class")
+    schedules: Mapped[list["Schedule"]] = relationship("Schedule", back_populates="yoga_class")
+
+
+class Instructor(Base):
+    __tablename__ = "instructors"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    bio: Mapped[str] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    yoga_classes: Mapped[list["YogaClass"]] = relationship("YogaClass", secondary="schedules", back_populates="instructor")
+    yoga_sessions: Mapped[list["YogaSession"]] = relationship("YogaSession", back_populates="instructor")
+    schedules: Mapped[list["Schedule"]] = relationship("Schedule", back_populates="instructor")
+
+
+class YogaSession(Base):
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    instructor_id: Mapped[int] = mapped_column(Integer, ForeignKey("instructors.id"), nullable=False)
+    yoga_class_id: Mapped[int] = mapped_column(Integer, ForeignKey("yoga_classes.id"), nullable=False)
+    start_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    end_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    max_capacity: Mapped[int] = mapped_column(Integer, nullable=False)
+    current_bookings: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    instructor: Mapped["Instructor"] = relationship("Instructor", back_populates="yoga_sessions")
+    yoga_class: Mapped["YogaClass"] = relationship("YogaClass", back_populates="yoga_sessions")
+    users: Mapped[list["User"]] = relationship("User", secondary="bookings", back_populates="yoga_sessions")
+    bookings: Mapped[list["Booking"]] = relationship("Booking", back_populates="session")
+
+
+class Schedule(Base):
+    __tablename__ = "schedules"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    yoga_class_id: Mapped[int] = mapped_column(Integer, ForeignKey("yoga_classes.id"), nullable=False)
+    instructor_id: Mapped[int] = mapped_column(Integer, ForeignKey("instructors.id"), nullable=False)
+    start_time: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    end_time: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    weekday: Mapped[int] = mapped_column(Integer, nullable=False) # 0=Monday, 6=Sunday
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    yoga_class: Mapped["YogaClass"] = relationship("YogaClass", back_populates="schedules")
+    instructor: Mapped["Instructor"] = relationship("Instructor", back_populates="schedules")
+
+
+class Booking(Base):
+    __tablename__ = "bookings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    session_id: Mapped[int] = mapped_column(Integer, ForeignKey("sessions.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="booked") # booked, cancelled, attended
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), onupdate=func.now())
+
+    user: Mapped["User"] = relationship("User", back_populates="bookings")
+    session: Mapped["YogaSession"] = relationship("YogaSession", back_populates="bookings")
+
+    __table_args__ = (UniqueConstraint("user_id", "session_id", name="unique_user_session_booking"),)
+    
+==> app/main.py <==
+"""
+This is the main entry point of the FastAPI application. It initializes the app, includes all the necessary routes, 
+and sets up any required middleware or event handlers. The app is structured to be modular, with separate files for 
+models, schemas, routes, and database interactions. This file will import the routes from the app.routes package and 
+include them in the FastAPI app instance. It also serves as the central place to configure any global settings or dependencies 
+that the app might need. 
+"""
+
+from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from app.routes import user, instructor, yoga_class, yoga_session, yoga_schedule, booking
+from app.database import init_db
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize database tables
+    await init_db()
+    yield
+    # Shutdown: Add cleanup code here if needed
+
+app = FastAPI(title="Fitness Club API", version="1.0.0", lifespan=lifespan)
+
+app.include_router(user.router)
+app.include_router(instructor.router)
+app.include_router(yoga_class.router)
+app.include_router(yoga_session.router)
+app.include_router(yoga_schedule.router)
+app.include_router(booking.router)
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to the Fitness Club API!"}
+==> app/routes/instructor.py <==
+"""
+This is the route module for handling instructor-related API endpoints. 
+It defines the necessary routes for creating, retrieving, updating, and deleting instructors in the fitness club 
+application. The routes will interact with the CRUD operations defined in the app.crud.instructor module and use 
+the Instructor schema for request and response validation. Each route will be designed to handle asynchronous requests 
+and provide appropriate HTTP status codes and responses based on the outcome of the operations.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.crud.instructor import create_instructor, get_instructor_by_id, update_instructor, delete_instructor
+from app.schema import InstructorCreate, InstructorResponse
+from app.database import get_db_session
+
+
+router = APIRouter(prefix="/instructors", tags=["instructors"])
+
+@router.post("/", response_model=InstructorResponse, status_code=status.HTTP_201_CREATED)
+async def create_instructor_endpoint(instructor: InstructorCreate, db: AsyncSession = Depends(get_db_session)):
+    return await create_instructor(db, instructor)  
+
+
+@router.get("/{instructor_id}", response_model=InstructorResponse)
+async def get_instructor_endpoint(instructor_id: int, db: AsyncSession = Depends(get_db_session)):
+    instructor = await get_instructor_by_id(db, instructor_id)
+    if not instructor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+    return instructor
+
+
+@router.put("/{instructor_id}", response_model=InstructorResponse)
+async def update_instructor_endpoint(instructor_id: int, instructor: InstructorCreate, db: AsyncSession = Depends(get_db_session)):
+    
+    updated_instructor = await update_instructor(db, instructor_id, instructor.name, instructor.bio)
+    if not updated_instructor:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+    return updated_instructor
+
+
+@router.delete("/{instructor_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_instructor_endpoint(instructor_id: int, db: AsyncSession = Depends(get_db_session)):
+    
+    success = await delete_instructor(db, instructor_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Instructor not found")
+    return None  # No content to return after successful deletion
+
+
+==> app/routes/booking.py <==
+"""
+This routes module defines the API endpoints for managing bookings in the fitness club application.
+It includes endpoints for creating, retrieving, updating, and deleting bookings. Each endpoint interacts with
+the corresponding CRUD operations defined in the app.crud.booking module to perform the necessary database operations.
+The routes are designed to handle HTTP requests and return appropriate responses based on the success or failure of
+the operations. The endpoints are structured to follow RESTful conventions, making it easy for clients to interact with the API.
+Only authenticated users can create, update, or delete bookings, while anyone can retrieve booking information.
+"""
+
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.crud.yoga_session import get_yoga_session_by_id
+from app.database import get_db_session
+from app.crud.booking import create_booking, get_booking_by_id, update_booking, delete_booking
+from app.schema import BookingCreate, BookingResponse, BookingUpdate
+from app.core.dependency import get_current_user
+
+
+router = APIRouter(prefix="/bookings", tags=["Bookings"])
+
+@router.post("/", response_model=BookingResponse, status_code=status.HTTP_201_CREATED)
+async def create_new_booking(booking: BookingCreate, db: AsyncSession = Depends(get_db_session), current_user=Depends(get_current_user)):
+    # before creating a booking, make sure the session_id provided in the booking exists and is valid, and the session has available slots
+    db_session = await get_yoga_session_by_id(db, booking.session_id)
+    if not db_session:
+        raise HTTPException(status_code=404, detail="Yoga session not found")
+    if db_session.max_capacity <= db_session.current_bookings:
+        raise HTTPException(status_code=400, detail="Yoga session is fully booked")
+
+    # Both the session increment and booking creation happen atomically in the CRUD function
+    # If booking creation fails, the increment is automatically rolled back
+    new_booking = await create_booking(db, booking, current_user.id, db_session)
+    
+    return new_booking
+
+
+@router.get("/{booking_id}", response_model=BookingResponse)
+async def read_booking(booking_id: int, db: AsyncSession = Depends(get_db_session)):
+    booking = await get_booking_by_id(db, booking_id)
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return booking
+
+
+@router.put("/{booking_id}", response_model=BookingResponse)
+async def update_existing_booking(booking_id: int, booking_update: BookingUpdate, db: AsyncSession = Depends(get_db_session), current_user=Depends(get_current_user)):
+    existing_booking = await get_booking_by_id(db, booking_id)
+    if not existing_booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if existing_booking.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this booking")
+    
+    updated_booking = await update_booking(db, booking_id, booking_update)
+    return updated_booking
+
+
+@router.delete("/{booking_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_existing_booking(booking_id: int, db: AsyncSession = Depends(get_db_session), current_user=Depends(get_current_user)):
+    existing_booking = await get_booking_by_id(db, booking_id)
+    if not existing_booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    if existing_booking.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this booking")
+    
+    success = await delete_booking(db, booking_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return None  # 204 No Content does not return a body
+
+
+
+==> app/routes/user.py <==
+"""
+This module defines the FastAPI routes for managing users in the fitness club application.
+It includes endpoints for creating a new user, retrieving user details, updating user information, and deleting a user.
+The routes interact with the database through the CRUD operations defined in app/crud/user.py and use
+Pydantic schemas from app/schema.py for request validation and response formatting.
+
+"""
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.schema import UserCreate, UserResponse, Token
+from app.crud.user import create_user, get_user_by_email, get_user_by_id, update_user, delete_user
+from app.database import get_db_session  
+from app.core.security import hash_password, verify_password, create_access_token
+
+
+router = APIRouter(prefix="/users", tags=["users"])
+
+@router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def create_new_user(user: UserCreate, db: AsyncSession = Depends(get_db_session)):
+    existing_user = await get_user_by_email(db, user.email)
+    if existing_user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+    
+    # Hash the password before storing it (you should implement a proper hashing function)
+    hashed_password = hash_password(user.password)
+    new_user = await create_user(db, user, hashed_password)
+    return new_user
+
+
+@router.get("/{user_id}", response_model=UserResponse)
+async def get_user(user_id: int, db: AsyncSession = Depends(get_db_session)):
+    user = await get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
+
+
+@router.put("/{user_id}", response_model=UserResponse)
+async def update_user_info(user_id: int, user: UserCreate, db: AsyncSession = Depends(get_db_session)):
+    existing_user = await get_user_by_id(db, user_id)
+    if not existing_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    
+    # Hash the password before updating it (you should implement a proper hashing function)
+    hashed_password = hash_password(user.password)
+    updated_user = await update_user(db, user_id, user, hashed_password)
+    return updated_user
+
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user_account(user_id: int, db: AsyncSession = Depends(get_db_session)):
+    existing_user = await get_user_by_id(db, user_id)
+    if not existing_user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    success = await delete_user(db, user_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return None  # 204 No Content does not return a body
+
+
+@router.post("/auth/login", response_model=Token)
+async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: AsyncSession = Depends(get_db_session)):
+    """
+    Login endpoint to authenticate user and return access token.
+    The tokenUrl in oauth2_scheme should match this endpoint path.
+    """
+    # The form_data.username contains the email in this case
+    user = await get_user_by_email(db, form_data.username)
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Create access token with user_id as "sub" claim
+    access_token = create_access_token(data={"sub": str(user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+
+
+==> app/routes/yoga_class.py <==
+"""
+This route module defines the API endpoints for managing yoga classes in the fitness club application. 
+It includes routes for creating, retrieving, updating, and deleting yoga classes. Each route interacts with 
+the corresponding CRUD operations defined in the app.crud.yoga_class module and uses the schemas defined in app.schema 
+for request validation and response formatting. The routes are designed to be asynchronous and follow RESTful conventions 
+for resource management.
+"""
+
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.crud.yoga_class import create_yoga_class, get_yoga_class_by_id, update_yoga_class, delete_yoga_class
+from app.schema import YogaClassCreate, YogaClassResponse, YogaClassUpdate
+from app.database import get_db_session     
+
+
+router = APIRouter(prefix="/yoga-classes", tags=["yoga-classes"])
+
+
+@router.post("/", response_model=YogaClassResponse, status_code=status.HTTP_201_CREATED)
+async def create_yoga_class_endpoint(yoga_class: YogaClassCreate, db: AsyncSession = Depends(get_db_session)):
+    return await create_yoga_class(db, yoga_class)
+
+
+@router.get("/{yoga_class_id}", response_model=YogaClassResponse)
+async def get_yoga_class_endpoint(yoga_class_id: int, db: AsyncSession = Depends(get_db_session)):
+    yoga_class = await get_yoga_class_by_id(db, yoga_class_id)
+    if not yoga_class:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Yoga class not found")
+    return yoga_class
+
+
+@router.put("/{yoga_class_id}", response_model=YogaClassResponse)
+async def update_yoga_class_endpoint(yoga_class_id: int, yoga_class: YogaClassUpdate, db: AsyncSession = Depends(get_db_session)):
+       
+    updated_yoga_class = await update_yoga_class(db, yoga_class_id, yoga_class)
+    if not updated_yoga_class:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Yoga class not found")
+    return updated_yoga_class
+
+
+@router.delete("/{yoga_class_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_yoga_class_endpoint(yoga_class_id: int, db: AsyncSession = Depends(get_db_session)):
+    
+    success = await delete_yoga_class(db, yoga_class_id)
+    if not success:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Yoga class not found")
+    return None  # No content to return after successful deletion
+
+
+
+==> app/routes/yoga_schedule.py <==
+"""
+This route module defines the api endpoints for managing yoga schedules in the fitness club application. 
+It includes routes for creating, reading, updating, and deleting yoga schedules.
+Each route interacts with the corresponding CRUD operations defined in the app.crud.yoga_schedule module to perform 
+the necessary database operations. The routes are designed to handle HTTP requests and return appropriate responses based 
+on the success or failure of the operations. The endpoints are structured to follow RESTful conventions, 
+making it easy for clients to interact with the API.
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_db_session
+from app.crud.yoga_schedule import create_yoga_schedule, get_yoga_schedule_by_id, update_yoga_schedule, delete_yoga_schedule
+from app.schema import ScheduleCreate, ScheduleResponse, ScheduleUpdate
+
+
+router = APIRouter(prefix="/schedules", tags=["Yoga Schedules"])
+
+@router.post("/", response_model=ScheduleResponse)
+async def create_schedule(schedule: ScheduleCreate, db: AsyncSession = Depends(get_db_session)):
+    new_schedule = await create_yoga_schedule(db, schedule)
+    return new_schedule
+
+
+@router.get("/{schedule_id}", response_model=ScheduleResponse)
+async def read_schedule(schedule_id: int, db: AsyncSession = Depends(get_db_session)):
+    schedule = await get_yoga_schedule_by_id(db, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Yoga schedule not found")
+    return schedule
+
+
+@router.put("/{schedule_id}", response_model=ScheduleResponse)
+async def update_schedule(schedule_id: int, schedule_update: ScheduleUpdate, db: AsyncSession = Depends(get_db_session)):
+    updated_schedule = await update_yoga_schedule(db, schedule_id, schedule_update)
+    if not updated_schedule:
+        raise HTTPException(status_code=404, detail="Yoga schedule not found")
+    return updated_schedule
+
+
+@router.delete("/{schedule_id}")
+async def delete_schedule(schedule_id: int, db: AsyncSession = Depends(get_db_session)):
+    success = await delete_yoga_schedule(db, schedule_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Yoga schedule not found")
+    return {"detail": "Yoga schedule deleted successfully"}
+
+
+==> app/routes/yoga_session.py <==
+"""
+This routes module defines the API endpoints for managing yoga sessions in the fitness club application.
+It includes endpoints for creating, retrieving, updating, and deleting yoga sessions. Each endpoint interacts with 
+the corresponding CRUD operations defined in the app.crud.yoga_session module to perform the necessary database operations.
+The routes are designed to handle HTTP requests and return appropriate responses based on the success or failure of 
+the operations. The endpoints are structured to follow RESTful conventions, making it easy for clients to interact with the API
+"""
+
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_db_session
+from app.crud.yoga_session import create_yoga_session, get_yoga_session_by_id, update_yoga_session, delete_yoga_session
+from app.schema import YogaSessionCreate, YogaSessionResponse, YogaSessionUpdate
+
+
+router = APIRouter(prefix="/yoga_sessions", tags=["Yoga Sessions"])
+
+@router.post("/", response_model=YogaSessionResponse)
+async def create_session(session: YogaSessionCreate, db: AsyncSession = Depends(get_db_session)):
+    new_session = await create_yoga_session(db, session)
+    return new_session
+
+
+@router.get("/{session_id}", response_model=YogaSessionResponse)
+async def read_session(session_id: int, db: AsyncSession = Depends(get_db_session)):
+    session = await get_yoga_session_by_id(db, session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Yoga session not found")
+    return session
+
+
+@router.put("/{session_id}", response_model=YogaSessionResponse)
+async def update_session(session_id: int, session_update: YogaSessionUpdate, db: AsyncSession = Depends(get_db_session)):
+    updated_session = await update_yoga_session(db, session_id, session_update)
+    if not updated_session:
+        raise HTTPException(status_code=404, detail="Yoga session not found")
+    return updated_session
+
+
+@router.delete("/{session_id}")
+async def delete_session(session_id: int, db: AsyncSession = Depends(get_db_session)):
+    success = await delete_yoga_session(db, session_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Yoga session not found")
+    return {"detail": "Yoga session deleted successfully"}
+
+
+
+==> app/core/dependency.py <==
+from fastapi import Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
+from jose import jwt, JWTError
+from .security import oauth2_scheme
+from app.database import get_db_session
+from .config import settings
+from app.crud.user import get_user_by_id
+
+async def get_current_user(token: str = Depends(oauth2_scheme), db: AsyncSession = Depends(get_db_session)): 
+
+    credential_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="could not validate credential",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        user_id = payload.get("sub")
+        if user_id is None:
+            raise credential_exception
+    except JWTError:
+        raise credential_exception
+    
+   
+    user = await get_user_by_id(db, int(user_id)) 
+    if user is None:
+        raise credential_exception
+    
+    return user
+
+
+==> app/core/security.py <==
+from passlib.context import CryptContext
+from fastapi.security import OAuth2PasswordBearer
+from datetime import timedelta, datetime
+from jose import jwt
+from .config import settings
+
+
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="users/auth/login")
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def create_access_token(data: dict) -> str:
+    to_encode = data.copy()
+    expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    to_encode.update({"exp": expire})
+    token = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return token
+==> app/core/config.py <==
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    # Raw variables from .env
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_SERVER: str
+    POSTGRES_PORT: int
+    POSTGRES_DB: str    
+
+    # Security settings for later
+    SECRET_KEY: str
+    ALGORITHM: str 
+    ACCESS_TOKEN_EXPIRE_MINUTES: int
+
+    @property
+    def DATABASE_URL(self) -> str:
+        # Constructing the Async URL for SQLAlchemy + asyncpg
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+settings = Settings()
+==> app/crud/instructor.py <==
+"""
+This module contains CRUD operations for the Instructor model.
+We will implement the following functions:
+- create_instructor(db: AsyncSession, name, bio) -> InstructorResponse
+- get_instructor_by_id(db: AsyncSession, instructor_id) -> Optional[InstructorResponse]
+- update_instructor(db: AsyncSession, instructor_id, name, bio) -> Optional[InstructorResponse]
+- delete_instructor(db: AsyncSession, instructor_id) -> bool
+"""
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, delete
+from app.models import Instructor
+from app.schema import InstructorCreate, InstructorResponse
+from typing import Optional 
+
+
+async def create_instructor(db: AsyncSession, instructor: InstructorCreate) -> InstructorResponse:
+    new_instructor = Instructor(
+        name=instructor.name,
+        bio=instructor.bio
+    )
+    db.add(new_instructor)
+    await db.commit()
+    await db.refresh(new_instructor)
+    return new_instructor
+
+
+async def get_instructor_by_id(db: AsyncSession, instructor_id: int) -> Optional[InstructorResponse]:
+    result = await db.execute(select(Instructor).where(Instructor.id == instructor_id))
+    instructor = result.scalars().first()
+    return instructor
+
+
+async def update_instructor(db: AsyncSession, instructor_id: int, instructor: InstructorCreate) -> Optional[InstructorResponse]:
+    result = await db.execute(select(Instructor).where(Instructor.id == instructor_id))
+    existing_instructor = result.scalars().first()
+    if not existing_instructor:
+        return None
+
+    existing_instructor.name = instructor.name
+    existing_instructor.bio = instructor.bio
+
+    await db.commit()
+    await db.refresh(existing_instructor)
+    return existing_instructor
+
+
+async def delete_instructor(db: AsyncSession, instructor_id: int) -> bool:
+    result = await db.execute(select(Instructor).where(Instructor.id == instructor_id))
+    existing_instructor = result.scalars().first()
+    if not existing_instructor:
+        return False
+
+    await db.delete(existing_instructor)
+    await db.commit()
+    return True
+==> app/crud/booking.py <==
+"""
+This module contains CRUD operations for the Booking model.
+It provides functions to create, read, update, and delete bookings in the database.
+Each function interacts with the database session to perform the necessary operations on the Booking model,
+ensuring that the data is correctly managed and persisted. The functions are designed to be used in
+the route handlers for managing bookings in the application.
+"""
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from app.models import Booking, YogaSession
+
+
+async def create_booking(db: AsyncSession, booking: Booking, current_user_id: int, yoga_session: YogaSession = None) -> Booking:
+    """
+    Create a booking and increment the yoga session's current_bookings count atomically.
+    
+    Both operations are wrapped in a single transaction to ensure data consistency.
+    If either operation fails, the entire transaction is rolled back.
+    """
+    try:
+        new_booking = Booking(
+            user_id=current_user_id,
+            session_id=booking.session_id
+        )
+        db.add(new_booking)
+        
+        # Increment the session's booking count in the same transaction
+        if yoga_session:
+            yoga_session.current_bookings += 1
+        
+        await db.commit()
+        await db.refresh(new_booking)
+        return new_booking
+    except Exception as e:
+        # If anything fails, rollback the transaction
+        await db.rollback()
+        raise e
+
+
+async def get_booking_by_id(db: AsyncSession, booking_id: int) -> Booking:
+    result = await db.execute(select(Booking).where(Booking.id == booking_id))
+    booking = result.scalars().first()
+    return booking
+
+
+async def update_booking(db: AsyncSession, booking_id: int, updated_booking: Booking) -> Booking:
+    existing_booking = await get_booking_by_id(db, booking_id)
+    if not existing_booking:
+        return None
+    
+    existing_booking.session_id = updated_booking.session_id
+
+    await db.commit()
+    await db.refresh(existing_booking)
+    return existing_booking
+
+
+async def delete_booking(db: AsyncSession, booking_id: int) -> bool:
+    existing_booking = await get_booking_by_id(db, booking_id)
+    if not existing_booking:
+        return False
+    
+    await db.delete(existing_booking)
+    await db.commit()
+    return True
+
+
+==> app/crud/user.py <==
+"""
+implementation of CRUD operations for User model
+we will implement the following functions:
+- create_user(db: AsyncSession, name, email, hashed_password) -> UserResponse
+- get_user_by_email(db: AsyncSession, email) -> Optional[UserResponse]
+- get_user_by_id(db: AsyncSession, user_id) -> Optional[UserResponse]
+- update_user(db: AsyncSession, user_id, name, email, hashed_password) -> Optional[UserResponse]
+- delete_user(db: AsyncSession, user_id) -> bool
+"""
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, delete
+from app.models import User
+from app.schema import UserCreate, UserResponse
+from typing import Optional     
+
+async def create_user(db: AsyncSession, user: UserCreate, hashed_password: str) -> UserResponse:
+    new_user = User(
+        name=user.name,
+        email=user.email,
+        hashed_password=hashed_password
+    )
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+    return new_user
+
+
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[UserResponse]:
+    result = await db.execute(select(User).where(User.email == email))
+    user = result.scalars().first()
+    return user
+
+
+async def get_user_by_id(db: AsyncSession, user_id: int) -> Optional[UserResponse]:
+    result = await db.execute(select(User).where(User.id == user_id))
+    user = result.scalars().first()
+    return user
+
+
+async def update_user(db: AsyncSession, user_id: int, user: UserCreate, hashed_password: str) -> Optional[UserResponse]:
+    result = await db.execute(select(User).where(User.id == user_id))
+    existing_user = result.scalars().first()
+    if not existing_user:
+        return None
+
+    existing_user.name = user.name
+    existing_user.email = user.email
+    existing_user.hashed_password = hashed_password
+
+    await db.commit()
+    await db.refresh(existing_user)
+    return existing_user
+
+
+async def delete_user(db: AsyncSession, user_id: int) -> bool:
+    result = await db.execute(select(User).where(User.id == user_id))
+    existing_user = result.scalars().first()
+    if not existing_user:
+        return False
+
+    await db.delete(existing_user)
+    await db.commit()
+    return True
+
+
+
+==> app/crud/yoga_class.py <==
+"""
+This module contains CRUD operations for the YogaClass model.
+We will implement the following functions:
+- create_yoga_class(db: AsyncSession, yoga_class: YogaClassCreate) -> YogaClassResponse
+- get_yoga_class_by_id(db: AsyncSession, yoga_class_id) -> Optional[YogaClassResponse]
+- update_yoga_class(db: AsyncSession, yoga_class_id, yoga_class: YogaClassUpdate) -> Optional[YogaClassResponse]
+- delete_yoga_class(db: AsyncSession, yoga_class_id) -> bool
+"""
+
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, update, delete
+from app.models import YogaClass
+from app.schema import YogaClassCreate, YogaClassResponse, YogaClassUpdate
+from typing import Optional
+
+
+async def create_yoga_class(db: AsyncSession, yoga_class: YogaClassCreate) -> YogaClassResponse:
+    new_yoga_class = YogaClass(
+        name=yoga_class.name,
+        description=yoga_class.description
+    )
+    db.add(new_yoga_class)
+    await db.commit()
+    await db.refresh(new_yoga_class)
+    return new_yoga_class
+
+
+async def get_yoga_class_by_id(db: AsyncSession, yoga_class_id: int) -> Optional[YogaClassResponse]:
+    result = await db.execute(select(YogaClass).where(YogaClass.id == yoga_class_id))
+    yoga_class = result.scalars().first()
+    return yoga_class
+
+
+async def update_yoga_class(db: AsyncSession, yoga_class_id: int, yoga_class: YogaClassUpdate) -> Optional[YogaClassResponse]:
+    result = await db.execute(select(YogaClass).where(YogaClass.id == yoga_class_id))
+    existing_yoga_class = result.scalars().first()
+    if not existing_yoga_class:
+        return None
+    
+    existing_yoga_class.name = yoga_class.name
+    existing_yoga_class.description = yoga_class.description
+    await db.commit()
+    await db.refresh(existing_yoga_class)
+    return existing_yoga_class
+
+
+async def delete_yoga_class(db: AsyncSession, yoga_class_id: int) -> bool:
+    result = await db.execute(select(YogaClass).where(YogaClass.id == yoga_class_id))
+    existing_yoga_class = result.scalars().first()
+    if not existing_yoga_class:
+        return False    
+    
+    await db.delete(existing_yoga_class)
+    await db.commit()
+    return True
+==> app/crud/yoga_schedule.py <==
+"""
+This module contains CRUD operations for the YogaSchedule model.
+It provides functions to create, read, update, and delete yoga schedules in the database.
+Each function interacts with the database session to perform the necessary operations on the YogaSchedule model,
+ensuring that the data is correctly managed and persisted. The functions are designed to be used in
+the route handlers for managing yoga schedules in the application.
+"""
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from app.models import Schedule 
+
+
+async def create_yoga_schedule(db: AsyncSession, schedule: Schedule) -> Schedule:
+    schedule = Schedule(
+        yoga_class_id=schedule.yoga_class_id,
+        instructor_id=schedule.instructor_id,
+        start_time=schedule.start_time,
+        end_time=schedule.end_time,
+        weekday=schedule.weekday
+    )
+
+    db.add(schedule)
+    await db.commit()
+    await db.refresh(schedule)
+    return schedule
+
+
+async def get_yoga_schedule_by_id(db: AsyncSession, schedule_id: int) -> Schedule:
+    result = await db.execute(select(Schedule).where(Schedule.id == schedule_id))
+    schedule = result.scalars().first()
+    return schedule
+
+
+async def update_yoga_schedule(db: AsyncSession, schedule_id: int, updated_schedule: Schedule) -> Schedule:
+    existing_schedule = await get_yoga_schedule_by_id(db, schedule_id)
+    if not existing_schedule:
+        return None
+    
+    existing_schedule.yoga_class_id = updated_schedule.yoga_class_id    
+    existing_schedule.instructor_id = updated_schedule.instructor_id
+    existing_schedule.start_time = updated_schedule.start_time
+    existing_schedule.end_time = updated_schedule.end_time
+    existing_schedule.weekday = updated_schedule.weekday
+
+    await db.commit()
+    await db.refresh(existing_schedule)
+    return existing_schedule
+
+
+async def delete_yoga_schedule(db: AsyncSession, schedule_id: int) -> bool:
+    existing_schedule = await get_yoga_schedule_by_id(db, schedule_id)
+    if not existing_schedule:
+        return False
+    
+    await db.delete(existing_schedule)
+    await db.commit()
+    return True
+
+
+
+
+==> app/crud/yoga_session.py <==
+"""
+This module contains CRUD operations for the YogaSession model.
+It provides functions to create, read, update, and delete yoga sessions in the database. 
+Each function interacts with the database session to perform the necessary operations on the YogaSession model, 
+ensuring that the data is correctly managed and persisted. The functions are designed to be used in the route handlers 
+for managing yoga sessions in the application.
+"""
+
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.future import select
+from app.models import YogaSession
+from app.schema import YogaSessionCreate, YogaSessionUpdate
+
+
+async def create_yoga_session(db: AsyncSession, yoga_session: YogaSessionCreate) -> YogaSession:
+    yoga_session = YogaSession(
+        yoga_class_id=yoga_session.yoga_class_id,
+        instructor_id=yoga_session.instructor_id,
+        start_time=yoga_session.start_time,
+        end_time=yoga_session.end_time,
+        max_capacity=yoga_session.max_capacity,
+    )
+
+    db.add(yoga_session)
+    await db.commit()
+    await db.refresh(yoga_session)
+    return yoga_session
+
+
+async def get_yoga_session_by_id(db: AsyncSession, yoga_session_id: int) -> YogaSession:
+    result = await db.execute(select(YogaSession).where(YogaSession.id == yoga_session_id))
+    yoga_session = result.scalars().first()
+    return yoga_session
+
+
+async def update_yoga_session(db: AsyncSession, yoga_session_id: int, updated_session: YogaSessionUpdate) -> YogaSession:
+    existing_session = await get_yoga_session_by_id(db, yoga_session_id)
+    if not existing_session:
+        return None
+
+    update_data = updated_session.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(existing_session, field, value)
+
+    await db.commit()
+    await db.refresh(existing_session)
+    return existing_session
+
+
+async def delete_yoga_session(db: AsyncSession, yoga_session_id: int) -> bool:
+    existing_session = await get_yoga_session_by_id(db, yoga_session_id)
+    if not existing_session:
+        return False
+    
+    await db.delete(existing_session)
+    await db.commit()
+    return True
+

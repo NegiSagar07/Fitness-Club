@@ -86,3 +86,5 @@ phase 3
 
 Hello! how are you? I am fine, thank you.
     
+
+Hey! I guess this blueprint is sufficient.     
